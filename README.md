@@ -1,4 +1,4 @@
-# sts2.fun Uploader
+# sts2.fun statistics
 
 A Slay the Spire 2 mod that uploads your finished runs to [sts2.fun](https://sts2.fun),
 the community stats site, so they count in the statistics and appear on your player page.
@@ -19,7 +19,7 @@ each upload so new runs go to the right account.
 
 ## Turning it off
 
-Set `"Enabled": false` in `sts2fun_uploader/config.json` in the game's user data folder
+Set `"Enabled": false` in `sts2fun_stats/config.json` in the game's user data folder
 (Linux: `~/.local/share/SlayTheSpire2/`, Windows: `%APPDATA%/SlayTheSpire2/`), or unsubscribe.
 
 ## Building
@@ -31,5 +31,5 @@ dotnet build -c Release            # GameDir defaults to the Linux Steam path
 dotnet build -c Release -p:GameDir="C:/Program Files (x86)/Steam/steamapps/common/Slay the Spire 2"
 ```
 
-Then copy `manifest.json` and `bin/Release/net9.0/sts2fun_uploader.dll` into
-`<game folder>/mods/sts2fun_uploader/`.
+Then copy `manifest.json` and `bin/Release/net9.0/sts2fun_stats.dll` into
+`<game folder>/mods/sts2fun_stats/`.

@@ -1,9 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <!-- sts2.fun uploader: a Slay the Spire 2 mod that sends finished runs (.run
+  <!-- sts2.fun statistics: a Slay the Spire 2 mod that sends finished runs (.run
        files) to https://sts2.fun. Builds against the game's own assemblies. -->
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
-    <AssemblyName>sts2fun_uploader</AssemblyName>
+    <AssemblyName>sts2fun_stats</AssemblyName>
     <RootNamespace>Sts2FunUploader</RootNamespace>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>

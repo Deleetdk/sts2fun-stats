@@ -47,11 +47,11 @@ public static class Uploader
         try
         {
             _userDir = OS.GetUserDataDir();
-            _stateDir = Path.Combine(_userDir, "sts2fun_uploader");
+            _stateDir = Path.Combine(_userDir, "sts2fun_stats");
             _cfg = Config.Load(_stateDir);
             _state = State.Load(_stateDir);
-            Http.DefaultRequestHeaders.UserAgent.ParseAdd("sts2fun-uploader/0.1 (+https://sts2.fun)");
-            new Harmony("sts2fun.uploader").PatchAll(typeof(Uploader).Assembly);
+            Http.DefaultRequestHeaders.UserAgent.ParseAdd("sts2fun-stats/0.1 (+https://sts2.fun)");
+            new Harmony("sts2fun.stats").PatchAll(typeof(Uploader).Assembly);
             GD.Print($"{Tag} loaded; uploads {(_cfg.Enabled ? "ON" : "OFF")} -> {_cfg.Server}");
             if (_cfg.Enabled) Schedule(TimeSpan.FromSeconds(20), "startup");
         }
@@ -204,7 +204,7 @@ public static class Uploader
         _badge.Uri = string.IsNullOrEmpty(_state.Username) ? _cfg.Server : $"{_cfg.Server.TrimEnd('/')}/player/{_state.Username}";
         _badge.TooltipText = _cfg.Enabled
             ? "Your runs upload to sts2.fun after each run. Click to open your page."
-            : "Uploading is off. To turn it back on, set \"Enabled\": true in sts2fun_uploader/config.json (game user data folder).";
+            : "Uploading is off. To turn it back on, set \"Enabled\": true in sts2fun_stats/config.json (game user data folder).";
     }
 }
 
@@ -218,7 +218,7 @@ static class Patch_NMainMenu_Ready
     }
 }
 
-/// <user data>/sts2fun_uploader/state.json: the account the site assigned.
+/// <user data>/sts2fun_stats/state.json: the account the site assigned.
 sealed class State
 {
     public string Username { get; set; } = "";
@@ -248,7 +248,7 @@ static class Patch_RunManager_CleanUp
     static void Postfix() => Uploader.OnRunEnded();
 }
 
-/// <user data>/sts2fun_uploader/config.json (created on first launch).
+/// <user data>/sts2fun_stats/config.json (created on first launch).
 sealed class Config
 {
     /// Uploads are on unless the player sets this to false (installing the mod is the opt-in).
