@@ -53,7 +53,7 @@ public static class Uploader
             Http.DefaultRequestHeaders.UserAgent.ParseAdd("sts2fun-stats/0.1 (+https://sts2.fun)");
             new Harmony("sts2fun.stats").PatchAll(typeof(Uploader).Assembly);
             GD.Print($"{Tag} loaded; uploads {(_cfg.Enabled ? "ON" : "OFF")} -> {_cfg.Server}");
-            if (_cfg.Enabled) Schedule(TimeSpan.FromSeconds(20), "startup");
+            if (_cfg.Enabled) Schedule(TimeSpan.FromSeconds(5), "startup");
         }
         catch (Exception e) { GD.PrintErr($"{Tag} init failed: {e.Message}"); }
     }
