@@ -16,6 +16,7 @@ using Godot;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Nodes.Screens.MainMenu;
 using MegaCrit.Sts2.Core.Modding;
+using System.Text.Json.Serialization;
 using MegaCrit.Sts2.Core.Runs;
 
 namespace Sts2FunUploader;
@@ -62,7 +63,36 @@ public static class Uploader
     /// is written by then, a short delay gives the save time to land.
     public static void OnRunEnded()
     {
+        RecordMods();
         if (_cfg.Enabled) Schedule(TimeSpan.FromSeconds(5), "run ended");
+    }
+
+    /// Note which mods were loaded when a run ended, so the site can leave out
+    /// runs played with gameplay mods (the mod's own affects_gameplay flag,
+    /// which the game also uses; it defaults to true when a mod omits it).
+    static void RecordMods()
+    {
+        try
+        {
+            var mods = ModManager.GetLoadedMods().Where(m => m.manifest != null).Select(m => new ModInfo
+            {
+                Id = m.manifest!.id ?? "", Version = m.manifest.version ?? "",
+                AffectsGameplay = m.manifest.affectsGameplay, WorkshopId = m.workshopId?.ToString() ?? "",
+            }).ToList();
+            _state.ModLog.Add(new ModSnapshot { T = DateTimeOffset.UtcNow.ToUnixTimeSeconds(), Mods = mods });
+            if (_state.ModLog.Count > 1000) _state.ModLog.RemoveRange(0, _state.ModLog.Count - 1000);
+            _state.Save(_stateDir);
+        }
+        catch (Exception e) { GD.PrintErr($"{Tag} mod snapshot: {e.Message}"); }
+    }
+
+    /// The snapshot taken when this run ended: the first one after it started,
+    /// within its run time plus a generous margin for pauses / save-and-quit.
+    static List<ModInfo>? ModsFor(RunFile r)
+    {
+        if (r.StartTime <= 0) return null;
+        long end = r.StartTime + r.RunTime + 12 * 3600;
+        return _state.ModLog.Where(x => x.T >= r.StartTime && x.T <= end).OrderBy(x => x.T).FirstOrDefault()?.Mods;
     }
 
     static void Schedule(TimeSpan delay, string why) => Task.Run(async () =>
@@ -106,7 +136,7 @@ public static class Uploader
         finally { Busy.Release(); }
     }
 
-    sealed record RunFile(string Path, string Name, string Hash, long StartTime, bool Solo);
+    sealed record RunFile(string Path, string Name, string Hash, long StartTime, long RunTime, bool Solo);
 
     /// Every .run file under <user data>/steam/<id>/[modded/]profile*/saves/history.
     static List<RunFile> CollectRuns()
@@ -125,14 +155,15 @@ public static class Uploader
                     byte[] bytes = File.ReadAllBytes(f);
                     string hash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
                     if (!seen.Add(hash)) continue;
-                    long start = 0; bool solo = false;
+                    long start = 0, runTime = 0; bool solo = false;
                     using (var doc = JsonDocument.Parse(bytes))
                     {
                         var r = doc.RootElement;
                         if (r.TryGetProperty("start_time", out var st) && st.ValueKind == JsonValueKind.Number) start = st.GetInt64();
+                        if (r.TryGetProperty("run_time", out var rt) && rt.ValueKind == JsonValueKind.Number) runTime = (long)rt.GetDouble();
                         if (r.TryGetProperty("players", out var pl) && pl.ValueKind == JsonValueKind.Array) solo = pl.GetArrayLength() == 1;
                     }
-                    list.Add(new RunFile(f, hash[..12] + "_" + System.IO.Path.GetFileName(f), hash, start, solo));
+                    list.Add(new RunFile(f, hash[..12] + "_" + System.IO.Path.GetFileName(f), hash, start, runTime, solo));
                 }
                 catch { /* unreadable or still being written: next sync picks it up */ }
             }
@@ -163,6 +194,9 @@ public static class Uploader
         var file = new ByteArrayContent(ms.ToArray());
         file.Headers.ContentType = new MediaTypeHeaderValue("application/zip");
         using var form = new MultipartFormDataContent { { file, "file", "runs.zip" } };
+        var mods = batch.Select(r => (r.Hash, Mods: ModsFor(r))).Where(x => x.Mods != null)
+                        .ToDictionary(x => x.Hash, x => x.Mods!);
+        if (mods.Count > 0) form.Add(new StringContent(JsonSerializer.Serialize(mods)), "mods");
         using var req = new HttpRequestMessage(HttpMethod.Post, _cfg.Server.TrimEnd('/') + "/upload") { Content = form };
         req.Headers.Accept.ParseAdd("application/json");       // JSON result (username, counts), not the HTML page
         using var resp = await Http.SendAsync(req);
@@ -219,9 +253,25 @@ static class Patch_NMainMenu_Ready
 }
 
 /// <user data>/sts2fun_stats/state.json: the account the site assigned.
+sealed class ModInfo
+{
+    [JsonPropertyName("id")] public string Id { get; set; } = "";
+    [JsonPropertyName("version")] public string Version { get; set; } = "";
+    [JsonPropertyName("affects_gameplay")] public bool AffectsGameplay { get; set; }
+    [JsonPropertyName("workshop_id")] public string WorkshopId { get; set; } = "";
+}
+
+sealed class ModSnapshot
+{
+    public long T { get; set; }
+    public List<ModInfo> Mods { get; set; } = new();
+}
+
 sealed class State
 {
     public string Username { get; set; } = "";
+    /// Mods loaded at the end of each run (unix time of the snapshot).
+    public List<ModSnapshot> ModLog { get; set; } = new();
     public static State Load(string dir)
     {
         try

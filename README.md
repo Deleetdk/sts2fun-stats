@@ -12,7 +12,10 @@ the community stats site, so they count in the statistics and appear on your pla
 
 ## What it sends
 
-Only your `.run` files. Nothing else is read or sent, and it does not change gameplay
+Your `.run` files, plus, for runs that end while the mod is installed, the list of mods
+that were loaded (id, version, the mod's own `affects_gameplay` flag and Workshop id), so
+runs played with gameplay-changing mods are left out of the statistics. Nothing else is
+read or sent, and it does not change gameplay
 (`affects_gameplay: false`). The site identifies you from your run files, the same way
 as the [upload page](https://sts2.fun/upload): your earliest solo run is included with
 each upload so new runs go to the right account.
