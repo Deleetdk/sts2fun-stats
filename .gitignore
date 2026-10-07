@@ -1,0 +1,5 @@
+bin/
+obj/
+tools/
+workshop/content/*.dll
+workshop/mod_id.txt
