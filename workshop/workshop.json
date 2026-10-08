@@ -1,7 +1,7 @@
 {
   "title": "sts2.fun statistics",
   "description": "Automatically uploads your finished Slay the Spire 2 runs to [url=https://sts2.fun]sts2.fun[/url], the community stats site (card, relic, ancient and event statistics, including causal win-rate effects).\n\n[b]What it does[/b]\n[list]\n[*]When you start the game and after each run, it checks which of your run files sts2.fun doesn't have yet and uploads those.\n[*]Shows your sts2.fun account name on the main menu; click it to open your player page.\n[/list]\n\n[b]What it sends[/b]\nYour .run files (the game's run history) and, for runs that end while the mod is installed, the list of mods that were loaded (their names and versions), so runs played with gameplay-changing mods are left out of the statistics. Nothing else is read or sent. It does not affect gameplay.\n\n[b]Turning it off[/b]\nSet \"Enabled\": false in sts2fun_stats/config.json in the game's user data folder, or unsubscribe.\n\nSource code: https://github.com/Deleetdk/sts2fun-stats",
-  "visibility": "private",
+  "visibility": "public",
   "changeNote": "Uploads 1 second after a run ends (was 5), so quitting right after a run doesn't skip it. Reports which mods were loaded when a run ended, so runs with gameplay mods are left out of the stats.",
   "tags": [],
   "dependencies": [],
