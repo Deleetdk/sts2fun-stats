@@ -64,7 +64,7 @@ public static class Uploader
     public static void OnRunEnded()
     {
         RecordMods();
-        if (_cfg.Enabled) Schedule(TimeSpan.FromSeconds(5), "run ended");
+        if (_cfg.Enabled) Schedule(TimeSpan.FromSeconds(1), "run ended");
     }
 
     /// Note which mods were loaded when a run ended, so the site can leave out
