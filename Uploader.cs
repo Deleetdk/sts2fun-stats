@@ -16,6 +16,7 @@ using Godot;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Nodes.Screens.MainMenu;
 using MegaCrit.Sts2.Core.Modding;
+using MegaCrit.Sts2.Core.Saves;
 using System.Text.Json.Serialization;
 using MegaCrit.Sts2.Core.Runs;
 
@@ -51,8 +52,17 @@ public static class Uploader
             _stateDir = Path.Combine(_userDir, "sts2fun_stats");
             _cfg = Config.Load(_stateDir);
             _state = State.Load(_stateDir);
+            Recorder.Init(_stateDir);
             Http.DefaultRequestHeaders.UserAgent.ParseAdd("sts2fun-stats/0.1 (+https://sts2.fun)");
-            new Harmony("sts2fun.stats").PatchAll(typeof(Uploader).Assembly);
+            // Patch class by class: a game update that renames one hooked method should
+            // only disable that hook, not uploads and the menu badge with it.
+            var harmony = new Harmony("sts2fun.stats");
+            foreach (var t in typeof(Uploader).Assembly.GetTypes())
+            {
+                if (t.GetCustomAttributes(typeof(HarmonyPatch), false).Length == 0) continue;
+                try { harmony.CreateClassProcessor(t).Patch(); }
+                catch (Exception e) { GD.PrintErr($"{Tag} hook {t.Name} skipped: {e.Message}"); }
+            }
             GD.Print($"{Tag} loaded; uploads {(_cfg.Enabled ? "ON" : "OFF")} -> {_cfg.Server}");
             if (_cfg.Enabled) Schedule(TimeSpan.FromSeconds(5), "startup");
         }
@@ -136,7 +146,7 @@ public static class Uploader
         finally { Busy.Release(); }
     }
 
-    sealed record RunFile(string Path, string Name, string Hash, long StartTime, long RunTime, bool Solo);
+    sealed record RunFile(string Path, string Name, string Hash, long StartTime, long RunTime, bool Solo, string Seed);
 
     /// Every .run file under <user data>/steam/<id>/[modded/]profile*/saves/history.
     static List<RunFile> CollectRuns()
@@ -155,15 +165,16 @@ public static class Uploader
                     byte[] bytes = File.ReadAllBytes(f);
                     string hash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
                     if (!seen.Add(hash)) continue;
-                    long start = 0, runTime = 0; bool solo = false;
+                    long start = 0, runTime = 0; bool solo = false; string seed = "";
                     using (var doc = JsonDocument.Parse(bytes))
                     {
                         var r = doc.RootElement;
                         if (r.TryGetProperty("start_time", out var st) && st.ValueKind == JsonValueKind.Number) start = st.GetInt64();
                         if (r.TryGetProperty("run_time", out var rt) && rt.ValueKind == JsonValueKind.Number) runTime = (long)rt.GetDouble();
+                        if (r.TryGetProperty("seed", out var sd) && sd.ValueKind == JsonValueKind.String) seed = sd.GetString() ?? "";
                         if (r.TryGetProperty("players", out var pl) && pl.ValueKind == JsonValueKind.Array) solo = pl.GetArrayLength() == 1;
                     }
-                    list.Add(new RunFile(f, hash[..12] + "_" + System.IO.Path.GetFileName(f), hash, start, runTime, solo));
+                    list.Add(new RunFile(f, hash[..12] + "_" + System.IO.Path.GetFileName(f), hash, start, runTime, solo, seed));
                 }
                 catch { /* unreadable or still being written: next sync picks it up */ }
             }
@@ -197,6 +208,10 @@ public static class Uploader
         var mods = batch.Select(r => (r.Hash, Mods: ModsFor(r))).Where(x => x.Mods != null)
                         .ToDictionary(x => x.Hash, x => x.Mods!);
         if (mods.Count > 0) form.Add(new StringContent(JsonSerializer.Serialize(mods)), "mods");
+        // shops / events / potions recorded during the run (matched by seed)
+        var extras = batch.Where(r => r.Seed != "").Select(r => (r.Hash, X: Recorder.Load(r.Seed))).Where(x => x.X != null)
+                          .ToDictionary(x => x.Hash, x => x.X!);
+        if (extras.Count > 0) form.Add(new StringContent(JsonSerializer.Serialize(extras)), "extras");
         using var req = new HttpRequestMessage(HttpMethod.Post, _cfg.Server.TrimEnd('/') + "/upload") { Content = form };
         req.Headers.Accept.ParseAdd("application/json");       // JSON result (username, counts), not the HTML page
         using var resp = await Http.SendAsync(req);
@@ -317,5 +332,29 @@ sealed class Config
         }
         catch (Exception e) { GD.PrintErr($"[sts2fun] config: {e.Message}"); }
         return new Config();
+    }
+}
+
+/// <summary>
+/// Keep the normal save profile when only non-gameplay mods are loaded.
+/// Since v0.113 the game switches to a separate, empty "modded/" profile as soon
+/// as any mod loads, even a read-only one like this. Spirebird Stats did the same
+/// unconditionally; here it only applies when every loaded mod declares
+/// affects_gameplay = false, so gameplay mods still get their own profile.
+/// </summary>
+[HarmonyPatch(typeof(UserDataPathProvider), nameof(UserDataPathProvider.IsRunningModded), MethodType.Setter)]
+static class Patch_SharedProfile
+{
+    static void Prefix(ref bool value)
+    {
+        try
+        {
+            if (value && ModManager.GetLoadedMods().All(m => m.manifest != null && !m.manifest.affectsGameplay))
+            {
+                value = false;
+                GD.Print("[sts2fun] only non-gameplay mods loaded: using the normal save profile");
+            }
+        }
+        catch (Exception e) { GD.PrintErr($"[sts2fun] profile check: {e.Message}"); }
     }
 }
