@@ -24,7 +24,8 @@ namespace Sts2FunUploader;
 /// seed, which the .run file also stores): full shop stock with prices and
 /// what was bought, every event page with all options shown (and which were
 /// locked / chosen), and every potion gained, used or discarded, including
-/// ones created and used within a single combat. Saved to
+/// ones created and used within a single combat, and every save & quit /
+/// reload (where it happened, mid-combat turn and HP). Saved to
 /// <user data>/sts2fun_stats/runs/<seed>.json and uploaded with the run.
 /// Read-only observation: nothing here changes game state.
 /// </summary>
@@ -153,6 +154,37 @@ static class Recorder
     // ---- potions ----
     public static void Potion(string what, IRunState rs, ICombatState? combat, PotionModel potion) => Update(rs, (x, floor) =>
         x.Potions.Add(new PotionEvent { Floor = floor, What = what, Id = potion.Id.Entry, InCombat = combat != null }));
+
+    // ---- save & quit / reload ----
+    // Reloading puts you back at the last save: the start of the current room
+    // (mid-combat that restarts the fight) or right after the last combat, so
+    // a quit-and-continue works as an undo. The .run file doesn't show it.
+    static IRunState? CurrentRun() =>
+        AccessTools.Property(typeof(RunManager), "State")?.GetValue(RunManager.Instance) as IRunState;
+
+    public static void SaveAndQuit() { var rs = CurrentRun(); Update(rs, (x, floor) =>
+    {
+        var r = new Reload { Floor = floor, Kind = "save_quit", Room = rs!.CurrentRoom?.RoomType.ToString() };
+        if (CombatManager.Instance.IsInProgress)
+        {
+            var cs = Traverse.Create(CombatManager.Instance).Field("_turnState").Property("State").GetValue<CombatState>();
+            r.InCombat = true;
+            r.Round = cs?.RoundNumber;
+        }
+        if (rs.Players.FirstOrDefault(pl => pl.Creature != null) is { } me && rs.Players.Count == 1)
+            r.Hp = me.Creature.CurrentHp;
+        x.Reloads.Add(r);
+    }); }
+
+    /// A saved run being continued. A quit we didn't see (crash, alt-F4,
+    /// closing the window) shows up as a resume with no quit before it.
+    public static void Resumed(IRunState rs, int reloadsBefore) => Update(rs, (x, floor) =>
+    {
+        x.GameReloads = reloadsBefore + 1;
+        var last = x.Reloads.LastOrDefault();
+        if (last is { Resumed: false }) last.Resumed = true;
+        else x.Reloads.Add(new Reload { Floor = floor, Kind = "unseen_quit", Resumed = true, Room = rs.CurrentRoom?.RoomType.ToString() });
+    });
 }
 
 sealed class RunExtras
@@ -162,6 +194,19 @@ sealed class RunExtras
     [JsonPropertyName("shops")] public List<ShopVisit> Shops { get; set; } = new();
     [JsonPropertyName("events")] public List<EventPage> Events { get; set; } = new();
     [JsonPropertyName("potions")] public List<PotionEvent> Potions { get; set; } = new();
+    [JsonPropertyName("reloads")] public List<Reload> Reloads { get; set; } = new();
+    // the game's own reload counter (counts reloads from before the mod was installed too)
+    [JsonPropertyName("game_reloads")] public int GameReloads { get; set; }
+}
+sealed class Reload
+{
+    [JsonPropertyName("floor")] public int Floor { get; set; }
+    [JsonPropertyName("kind")] public string Kind { get; set; } = "";
+    [JsonPropertyName("room")] public string? Room { get; set; }
+    [JsonPropertyName("in_combat")] public bool InCombat { get; set; }
+    [JsonPropertyName("round")] public int? Round { get; set; }
+    [JsonPropertyName("hp")] public int? Hp { get; set; }
+    [JsonPropertyName("resumed")] public bool Resumed { get; set; }
 }
 sealed class ShopVisit
 {
@@ -250,4 +295,16 @@ static class Patch_Hook_PotionUsed
 static class Patch_Hook_PotionDiscarded
 {
     static void Prefix(IRunState runState, ICombatState? combatState, PotionModel potion) => Recorder.Safe(() => Recorder.Potion("discarded", runState, combatState, potion));
+}
+
+[HarmonyPatch(typeof(MegaCrit.Sts2.Core.Nodes.Screens.PauseMenu.NPauseMenu), "OnSaveAndQuitButtonPressed")]
+static class Patch_PauseMenu_SaveAndQuit
+{
+    static void Prefix() => Recorder.Safe(Recorder.SaveAndQuit);
+}
+
+[HarmonyPatch(typeof(RunManager), nameof(RunManager.SetUpSavedSingleplayer))]
+static class Patch_RunManager_SetUpSaved
+{   // runs before the game increments save.NumReloads
+    static void Prefix(RunState state, MegaCrit.Sts2.Core.Saves.SerializableRun save) => Recorder.Safe(() => Recorder.Resumed(state, save.NumReloads));
 }
