@@ -2,8 +2,8 @@
   "id": "sts2fun_stats",
   "name": "sts2.fun statistics",
   "author": "sts2.fun",
-  "description": "Uploads your finished runs to https://sts2.fun so they count in the community stats, and shows your sts2.fun account on the main menu. With each run it also sends what the .run file leaves out: full shop stock with prices and purchases, every event option shown, and potions gained, used and discarded; plus which mods were loaded, so runs with gameplay mods are left out of the stats. Keeps your normal save profile when only non-gameplay mods are loaded. Turn uploads off by setting \"Enabled\": false in sts2fun_stats/config.json. Does not affect gameplay.",
-  "version": "0.2.0",
+  "description": "Uploads your finished runs to https://sts2.fun so they count in the community stats, and shows your sts2.fun account on the main menu. With each run it also sends what the .run file leaves out: full shop stock with prices and purchases, every event option shown, and potions gained, used and discarded; plus which mods were loaded, so runs with gameplay mods are left out of the stats. Keeps your normal save profile when only non-gameplay mods are loaded. Turn uploads off by setting \"Enabled\": false in sts2fun_stats/config.json. Adds Undo card / Undo turn / Restart buttons to single-player combat (the same as Save & Quit and replaying your moves; every use is recorded with the run). Turn them off with \"UndoButtons\": false in the same file.",
+  "version": "0.3.0",
   "has_pck": false,
   "has_dll": true,
   "affects_gameplay": false

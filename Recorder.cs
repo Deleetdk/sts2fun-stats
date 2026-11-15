@@ -162,9 +162,12 @@ static class Recorder
     static IRunState? CurrentRun() =>
         AccessTools.Property(typeof(RunManager), "State")?.GetValue(RunManager.Instance) as IRunState;
 
-    public static void SaveAndQuit() { var rs = CurrentRun(); Update(rs, (x, floor) =>
+    public static void SaveAndQuit() => Rewind("save_quit");
+
+    /// kind: save_quit, or the undo buttons: undo_action, undo_turn, restart_combat
+    public static void Rewind(string kind) { var rs = CurrentRun(); Update(rs, (x, floor) =>
     {
-        var r = new Reload { Floor = floor, Kind = "save_quit", Room = rs!.CurrentRoom?.RoomType.ToString() };
+        var r = new Reload { Floor = floor, Kind = kind, Room = rs!.CurrentRoom?.RoomType.ToString() };
         if (CombatManager.Instance.IsInProgress)
         {
             var cs = Traverse.Create(CombatManager.Instance).Field("_turnState").Property("State").GetValue<CombatState>();

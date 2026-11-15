@@ -39,6 +39,7 @@ public static class Uploader
     static readonly SemaphoreSlim Busy = new(1, 1);
     static string _userDir = "";
     static Config _cfg = new();
+    public static bool UndoEnabled => _cfg.UndoButtons;
     static State _state = new();
     static string _stateDir = "";
     static LinkButton? _badge;
@@ -319,6 +320,8 @@ sealed class Config
     /// Uploads are on unless the player sets this to false (installing the mod is the opt-in).
     public bool Enabled { get; set; } = true;
     public string Server { get; set; } = "https://sts2.fun";
+    /// Undo action / undo turn / restart combat buttons in single-player combat.
+    public bool UndoButtons { get; set; } = true;
 
     public static Config Load(string dir)
     {
